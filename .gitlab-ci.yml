@@ -1,0 +1,31 @@
+image: python:latest
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PLATFORMIO_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pio"
+
+
+cache:
+  paths:
+    - .cache/pip
+    - .cache/pio
+    - venv/
+
+before_script:
+  - python --version
+  - pip install virtualenv platformio
+  - virtualenv venv
+  - source venv/bin/activate
+
+mining-software:
+  script:
+      - cd mining-software
+      - pip install -r requirements.txt
+      - python -m tests.test_miner -q
+
+mining-firmware:
+  script:
+      - cd mining-firmware
+      - pio run
+      - pio test --without-uploading --without-testing
+      - pio check --fail-on-defect=low --fail-on-defect=medium --fail-on-defect=high

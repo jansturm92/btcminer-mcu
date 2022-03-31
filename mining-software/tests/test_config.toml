@@ -1,0 +1,22 @@
+# comment this section to use device from main config as DUT
+[device]
+type = "simulator"
+timeout = 0
+avg_delay = 0
+
+# BTC block #222222
+[[blocks]]
+file = "block_222222.json" # bitcoin-cli getblock "00000000000000b8b49d0b61b14994b5c0a511c4b48a1e251ff2b479b2e6f678"
+    [blocks.coinbase]
+    message = "hex:04000018c3124d696e656420627920425443204775696c640800021855cc010000"
+    address = "14cZMQk89mRYQkDEj8Rn25AnGoBi5H6uer"
+    value = 2558340000
+
+# BTC block #555444
+[[blocks]]
+file = "block_555444.json" # bitcoin-cli getblock "00000000000000000016fcd451c5e3127fa99fb64f0b750d9a86df547f7b4642"
+    [blocks.coinbase]
+    message = "hex:048c69225c2f706f6f6c696e2e636f6d2ffabe6d6d8b1b3289bfa950d03b4479e4697e8aa85da0fccb7d8e3ac7bc32ac3f1c87529701000000000000000908e229c94a000000000000"
+    address = "3JAvzKWgtxPzcbTqKeAT7qfwoZBjtVmkBU"
+    value = 1264253324
+    witness_commitment = "6a24aa21a9edd7a6da25d4e1798fefb649817e784334e75e8da89edbd282c60910da92a2dc03"

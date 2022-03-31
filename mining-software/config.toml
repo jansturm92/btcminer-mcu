@@ -1,0 +1,26 @@
+# use 'python miner.py --help' for more details
+
+[device]
+type = "serial"
+port = "/dev/ttyACM0"
+baudrate = 115200
+read_timeout = 10 # seconds
+write_timeout = 3 # seconds
+
+# [device]
+# type = "simulator"
+# timeout = 3
+# avg_delay = 1
+
+[rpc]
+server = "localhost:8332"
+username = "user"
+password = "pass"
+
+[coinbase]
+message = "str:Mined with STM32F4 Discovery Board"
+address = "2N2Se6a3H1HCnAAi7piFrRrk4guiTk58nm9"
+
+[logging]
+enabled = true
+level = "INFO"

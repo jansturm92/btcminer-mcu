@@ -1,0 +1,49 @@
+name: Build and Test
+
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup python3
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.6'
+          cache: 'pip'
+
+      - name: Setup locales
+        run: |
+          sudo apt-get update && sudo apt-get install locales
+          sudo locale-gen en_US.UTF-8
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v2
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+
+      - name: Install Dependencies
+        run: |
+          cd mining-software
+          pip install -r requirements.txt
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: Build and Check mining-firmware
+        run: |
+          cd mining-firmware
+          export LC_ALL=en_US.UTF-8
+          pio run
+          pio test --without-uploading --without-testing
+          pio check --fail-on-defect=low --fail-on-defect=medium --fail-on-defect=high
+
+      - name: Test mining-software
+        run: |
+          cd mining-software
+          export LC_ALL=en_US.UTF-8
+          python -m tests.test_miner -q
