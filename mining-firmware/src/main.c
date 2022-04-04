@@ -23,17 +23,6 @@
 #define NONCE_LEN 4
 #define HASH_LEN 32
 
-#define LED_PROCESSING STM32_LED_BLUE
-#define LED_IDLE STM32_LED_ORANGE
-
-#define SET_STATUS_PROCESSING                                                            \
-    STM32_LED_SET(LED_PROCESSING);                                                       \
-    STM32_LED_CLEAR(LED_IDLE);
-#define SET_STATUS_IDLE                                                                  \
-    STM32_LED_SET(LED_IDLE);                                                             \
-    STM32_LED_CLEAR(LED_PROCESSING);
-#define IS_STATUS_PROCESSING STM32_LED_READ(LED_PROCESSING)
-
 /// block header = [version (4B) | previous_block_hash (32B) | merkle_root (32B) |
 ///                 timestamp (4B) | bits (4B) | nonce (4B)]
 static uint8_t block_header[BLOCK_HEADER_LEN];
@@ -95,10 +84,10 @@ static void cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep) {
     if (missing == 0) {
         LOG_INFO_HEX("block header", block_header, BLOCK_HEADER_LEN);
         LOG_INFO("start nonce = %lu\n", *nonce);
-        SET_STATUS_PROCESSING;
+        STM32_LED_SET(STM32_LED_PROCESSING);
         missing = BLOCK_HEADER_LEN;
     } else {
-        SET_STATUS_IDLE;
+        STM32_LED_CLEAR(STM32_LED_PROCESSING);
     }
 }
 
@@ -130,11 +119,11 @@ static inline uint16_t check_hash(void) {
  */
 static void __attribute__((__noreturn__)) scanhash_loop(void) {
     while (1) {
-        if (IS_STATUS_PROCESSING) {
+        if (STM32_LED_READ(STM32_LED_PROCESSING)) {
             if (*nonce == 0xFFFFFFFF || check_hash() == 0) {
                 LOG_INFO("sending nonce: %lu\n", *nonce);
                 LOG_INFO_HEX("hash", hash, 32);
-                SET_STATUS_IDLE;
+                STM32_LED_CLEAR(STM32_LED_PROCESSING);
                 reply_nonce();
                 stm32_leds_blink(STM32_LED_GREEN, 6);
             }
@@ -203,7 +192,7 @@ int main(void) {
 
     usb_device = usbd_setup(&dev_descriptor, cdcacm_data_rx_cb, usb_strings);
 
-    SET_STATUS_IDLE;
+    STM32_LED_CLEAR(STM32_LED_PROCESSING);
     scanhash_loop();
 
     // unreachable code
