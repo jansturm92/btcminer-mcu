@@ -17,8 +17,15 @@
 
 #include <stdint.h>
 
-#define BSWAP32(v) __builtin_bswap32(v)
+typedef struct {
+    uint32_t data[64];
+    uint32_t prehash[8];
+    uint32_t *midstate;
+} SHA256D_MS_CTX;
 
-void sha256d(unsigned char *hash, const unsigned char *data, int len);
+void sha256d(uint8_t *hash, const uint8_t *data, int len);
+
+void sha256d_ms_init(SHA256D_MS_CTX *ctx, uint32_t *buf);
+void sha256d_ms(uint32_t *hash, SHA256D_MS_CTX *ctx);
 
 #endif // MINING_FIRMWARE_LIB_SHA256D_H

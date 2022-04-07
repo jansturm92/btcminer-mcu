@@ -17,22 +17,18 @@
 #include <usb-cdc.h>
 
 #define USB_DESCRIPTOR_IPRODUCT "Bitcoin USB Miner"
-#define SERIAL_NUMBER_LEN 27
 
-#define BLOCK_HEADER_LEN 80
-#define NONCE_LEN 4
-#define HASH_LEN 32
+SHA256D_MS_CTX sha256d_ms_ctx;
 
-/// block header = [version (4B) | previous_block_hash (32B) | merkle_root (32B) |
-///                 timestamp (4B) | bits (4B) | nonce (4B)]
-static uint8_t block_header[BLOCK_HEADER_LEN];
-static uint32_t *nonce = (uint32_t *)(block_header + BLOCK_HEADER_LEN - NONCE_LEN);
-static uint16_t missing = BLOCK_HEADER_LEN;
-static uint8_t hash[HASH_LEN];
+/// rx_buf = [midstate (32B) | timestamp (4B) | bits (4B) | nonce (4B) | reserved (48B)]
+static uint8_t rx_buf[96];
+static uint32_t *nonce = &(sha256d_ms_ctx.data[3]);
+static uint32_t nonce_cached;
+static uint8_t hash[32];
 
 static usbd_device *usb_device;
 
-static char serial_number[SERIAL_NUMBER_LEN];
+static char serial_number[27];
 
 static const struct usb_device_descriptor dev_descriptor = {
     .bLength = USB_DT_DEVICE_SIZE,
@@ -63,37 +59,29 @@ static const char *usb_strings[] = {
 void otg_fs_isr(void) { usbd_poll(usb_device); }
 
 /**
- * @brief RX callback for CDC device, that reads the block header.
- * @details Writes received data into #block_header buffer until #BLOCK_HEADER_LEN bytes
- *          are received. Upon reception of all bytes, the status of the miner is changed
- *          to 'processing'.
+ * @brief RX callback for CDC device, that reads data from mining software.
+ * @details Writes 48 bytes into #rx_buf buffer. Subsequently performs sha256d midstate
+ *          precomputations and changes the status of the miner to 'processing'.
  * @param usbd_dev the usb device handle returned from usbd_setup()
  * @param ep unused
  */
 static void cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep) {
     (void)ep;
 
-    // read packets of size 64 byte or less
-    uint16_t ret = usbd_ep_read_packet(
-        usbd_dev, 0x01, block_header + BLOCK_HEADER_LEN - missing, missing);
-    missing -= ret;
+    // read 48 bytes = [midstate (32B) | timestamp (4B) | bits (4B) | nonce (4B)]
+    usbd_ep_read_packet(usbd_dev, 0x01, rx_buf, 48);
+    LOG_INFO("USB: received new data\n");
+    LOG_DEBUG_HEX("RX buffer", rx_buf, 48);
 
-    LOG_DEBUG("received %d bytes (total: %d/%d)\n", ret, BLOCK_HEADER_LEN - missing,
-              BLOCK_HEADER_LEN);
-
-    if (missing == 0) {
-        LOG_INFO_HEX("block header", block_header, BLOCK_HEADER_LEN);
-        LOG_INFO("start nonce = %lu\n", *nonce);
-        STM32_LED_SET(STM32_LED_PROCESSING);
-        missing = BLOCK_HEADER_LEN;
-    } else {
-        STM32_LED_CLEAR(STM32_LED_PROCESSING);
-    }
+    sha256d_ms_init(&sha256d_ms_ctx, (uint32_t *)rx_buf);
+    nonce_cached = BSWAP32(*nonce);
+    LOG_INFO("starting with nonce '0x%08lx'\n", nonce_cached);
+    STM32_LED_SET(STM32_LED_PROCESSING);
 }
 
-/// sends nonce (little endian) back to the mining software
+/// sends nonce (big endian) back to the mining software
 static void reply_nonce(void) {
-    while (usbd_ep_write_packet(usb_device, 0x82, (uint8_t *)nonce, NONCE_LEN) == 0)
+    while (usbd_ep_write_packet(usb_device, 0x82, (uint8_t *)nonce, 4) == 0)
         ;
 }
 
@@ -104,10 +92,13 @@ static void reply_nonce(void) {
  * @return 0 iff header_hash <= target_hash
  */
 static inline uint16_t check_hash(void) {
-    sha256d(hash, block_header, BLOCK_HEADER_LEN);
-    LOG_DEBUG_HEX("block_header", block_header, BLOCK_HEADER_LEN);
-    LOG_DEBUG_HEX("hash        ", hash, 32);
-    return *(uint16_t *)(hash + 30);
+    sha256d_ms((uint32_t *)hash, &sha256d_ms_ctx);
+    LOG_DEBUG("nonce: 0x%08lx\n", nonce_cached);
+    LOG_DEBUG_HEX("sha256d_ms_ctx.data", (uint8_t *)sha256d_ms_ctx.data, 256);
+    LOG_DEBUG_HEX("sha256d_ms_ctx.midstate", (uint8_t *)sha256d_ms_ctx.midstate, 32);
+    LOG_DEBUG_HEX("sha256d_ms_ctx.preshash", (uint8_t *)sha256d_ms_ctx.prehash, 32);
+    LOG_DEBUG_HEX("hash", hash, 32);
+    return *(uint16_t *)(hash + 28);
 }
 
 /**
@@ -121,13 +112,14 @@ static void __attribute__((__noreturn__)) scanhash_loop(void) {
     while (1) {
         if (STM32_LED_READ(STM32_LED_PROCESSING)) {
             if (*nonce == 0xFFFFFFFF || check_hash() == 0) {
-                LOG_INFO("sending nonce: %lu\n", *nonce);
-                LOG_INFO_HEX("hash", hash, 32);
+                LOG_INFO("<<<SUCCESS>> found nonce '0x%08lx'\n", BSWAP32(*nonce));
+                LOG_INFO("hash = xxxx....xxxx%08lx\n", ((uint32_t *)hash)[7]);
                 STM32_LED_CLEAR(STM32_LED_PROCESSING);
                 reply_nonce();
                 stm32_leds_blink(STM32_LED_GREEN, 6);
             }
-            ++(*nonce);
+            // bswap32 necessary since we want linear increment of starting nonce
+            *nonce = BSWAP32(++nonce_cached);
         }
     }
 }

@@ -21,6 +21,7 @@ import toml
 
 from miner import BlockTemplate, Miner
 from config_loader import miner_config
+from sha256d_ms import calculate_midstate
 
 
 def bits_to_target(bits: bytes) -> str:
@@ -134,6 +135,26 @@ class TestMiner(unittest.TestCase):
                 )
 
 
+class TestSha256(unittest.TestCase):
+    def setUp(self):
+        print("")
+        self.header_22222 = (
+            "02000000426f46ed1c52cf2fff79f2812628701d2a1a7817f4aa89a50402000000000000"
+            "eaedc86055f8961836c6b72dcce28ca55587998c9f16bb05c8a803b36316b914e2212551"
+            "5c98041ab8686264"
+        )
+        self.midstate_22222 = (
+            "167ff5ad63ab786ce8fcb09136fff458ea016749b643beff9b0f750b51975651"
+        )
+
+    def test_midstate(self):
+        midstate = calculate_midstate(bytes.fromhex(self.header_22222))
+        self.assertEqual(bytes.fromhex(self.midstate_22222), midstate)
+
+
 if __name__ == "__main__":
     runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(unittest.makeSuite(TestMiner))
+    suite = unittest.TestSuite()
+    suite.addTest(unittest.makeSuite(TestMiner))
+    suite.addTest(unittest.makeSuite(TestSha256))
+    result = runner.run(suite)

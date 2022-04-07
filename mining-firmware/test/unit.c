@@ -28,10 +28,16 @@ const char block_header_222222[] =
     "55f8961836c6b72dcce28ca55587998c9f16bb05c8a803b36316b914e22125515c98041ab868626"
     "4";
 
+const char midstate_data_222222[] = "167ff5ad63ab786ce8fcb09136fff458ea016749b643beff9b0f"
+                                    "750b5197565114b91663512521e21a04985c646268b8";
+
 const char block_header_555444[] =
     "000000203c9568c0d8bf0e3eec9d8893e5bfc712b5578db13b630a00000000000000000043a3cbaf"
     "c3a3213a225783362b1cc02d077d9f3b1c8259ef03346125b5d0cd66b569225cf41e3717ce88e5f"
     "9";
+
+const char midstate_data_555444[] = "48ba5d2cb31d73fa8194633412f1d424d2abb6ef7ef99e1f2877"
+                                    "58f582a839ef66cdd0b55c2269b517371ef4f9e588ce";
 
 static void test_sha256d(void) {
 
@@ -62,6 +68,28 @@ static void test_sha256d(void) {
     TEST_ASSERT(!memcmp(expected, actual, 32))
 }
 
+static void test_sha256d_ms(void) {
+
+    SHA256D_MS_CTX ctx;
+    uint32_t *nonce = &(ctx.data[3]);
+    uint8_t buf[96];
+    uint8_t hash[32];
+
+    hex2bin(buf, midstate_data_222222);
+    sha256d_ms_init(&ctx, (uint32_t *)buf);
+    sha256d_ms((uint32_t *)hash, &ctx);
+    TEST_ASSERT_EQUAL(0, *(uint32_t *)(hash + 28));
+
+    hex2bin(buf, midstate_data_555444);
+    sha256d_ms_init(&ctx, (uint32_t *)buf);
+    sha256d_ms((uint32_t *)hash, &ctx);
+    TEST_ASSERT_EQUAL(0, *(uint32_t *)(hash + 28));
+
+    ++(*nonce);
+    sha256d_ms((uint32_t *)hash, &ctx);
+    TEST_ASSERT_NOT_EQUAL(0, *(uint32_t *)(hash + 28));
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -73,6 +101,7 @@ int main(void) {
     UNITY_BEGIN();
 
     RUN_TEST(test_sha256d);
+    RUN_TEST(test_sha256d_ms);
 
     UNITY_END();
 

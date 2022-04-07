@@ -30,6 +30,7 @@ from bitcoinlib.values import Value
 import mining_device
 from config_loader import miner_config
 from custom_logger import logger
+from sha256d_ms import calculate_midstate
 
 
 class MinerError(Exception):
@@ -43,6 +44,17 @@ def sha256d(data: bytes) -> bytes:
     :return: 32 byte double SHA256 hash
     """
     return hashlib.sha256(hashlib.sha256(data).digest()).digest()
+
+
+def swap32_buffer(buf: bytes) -> bytes:
+    """
+    Swap endianness for every 4-byte group in the given buffer, e.g. swap32_buffer(0102030405060708) = 0403020108070605.
+    :param buf: arbitrary length buffer
+    :return: swapped buffer
+    """
+    return b"".join(
+        [buf[i + 3 : i - 1 if i else None : -1] for i in range(0, len(buf), 4)]
+    )
 
 
 class BlockTemplate:
@@ -267,12 +279,19 @@ class Miner:
 
         logger.info(f"sending work for {block_template.block_info()} to {self.device}")
         logger.debug(f"\tblock header = {block_header.hex()}")
-        self.device.write(block_header)
+
+        if self.device.has_midstate_support:
+            data = calculate_midstate(block_header)
+            logger.debug(f"\tmidstate = {data.hex()}")
+            data += swap32_buffer(block_header[64:])
+            self.device.write(data)
+        else:
+            self.device.write(block_header)
 
         logger.info(f"waiting for response from {self.device}")
         response = self.device.read(size=4)
         if len(response):
-            nonce = response[::-1].hex()
+            nonce = response.hex()
             logger.info(f"\treceived share (nonce = 0x{nonce}) from {self.device}")
 
             block_hash = block_template.block_header_hash(nonce)
@@ -354,11 +373,11 @@ class Miner:
 
     def connect_device(self) -> None:
         if not self.device.is_connected():
-            logger.info(f"Connecting to device {repr(self.device)}")
+            logger.info(f"Connecting to {repr(self.device)}")
             self.device.connect()
 
     def disconnect_device(self) -> None:
-        logger.info(f"Disconnecting device {repr(self.device)}")
+        logger.info(f"Disconnecting {repr(self.device)}")
         self.device.disconnect()
 
     def start(self) -> None:

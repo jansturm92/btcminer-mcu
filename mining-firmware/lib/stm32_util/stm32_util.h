@@ -68,6 +68,8 @@ extern volatile uint32_t sys_count;
     overflow_count = sys_count - overflow_count;                                         \
     (res_cyc) = (overflow_count + 1) * STK_RELOAD - cyc
 
+#define BSWAP32(v) __builtin_bswap32(v)
+
 void stm32_leds_blink(uint16_t gpios, size_t duration);
 void sleep(uint32_t delay);
 void usart_setup(void);

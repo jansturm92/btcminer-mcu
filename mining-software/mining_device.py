@@ -32,6 +32,7 @@ class MiningDevice(ABC):
         self.name = name
         self.read_timeout = read_timeout
         self.write_timeout = write_timeout
+        self.has_midstate_support = True
 
     def __str__(self):
         return f"<Device '{self.name}' [type={self.type}]>"
@@ -163,6 +164,7 @@ class SimulatorMiningDevice(MiningDevice):
         super().__init__("simulator", name, timeout, timeout)
         self.avg_delay = avg_delay
         self.data = b""
+        self.has_midstate_support = False
 
     def __repr__(self):
         return (
@@ -203,7 +205,7 @@ class SimulatorMiningDevice(MiningDevice):
             return b""
 
         time.sleep(delay)
-        return struct.pack("<L", self._scanhash(self.data))
+        return struct.pack(">L", self._scanhash(self.data))
 
 
 def create_device(config_device: dict) -> MiningDevice:

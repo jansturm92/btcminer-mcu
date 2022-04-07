@@ -69,13 +69,11 @@ The mining software is configured via [config.toml](mining-software/config.toml)
 `make start-mining`: Starts the mining software with default parameters defined in `config.toml`.  
 `make test-mining`: Runs the test suite on the device defined in [test_config.toml](mining-software/tests/test_config.toml).  
 
-**Screenshot of regtest solo mining with STM32F4DISCOVERY board**
-<img src="img/screenshot.png">
+**Screenshot of regtest solo mining with STM32F4DISCOVERY board** (Click for larger image)
+[![screenshot](img/screenshot.png)](https://raw.githubusercontent.com/jansturm92/btcminer-mcu/master/img/screenshot.png)
 *top:* Logging output of mining-software, *bottom-left:* Serial output of STM32 board, *bottom-right:* Output of bitcoind regtest
 
-
 ## Future Releases
-- [ ] Add midstate hashing optimization
 - [ ] Add [longpoll](https://en.bitcoin.it/wiki/BIP_0022#Optional:_Long_Polling) support
 - [ ] Add autodetection of miners
 - [ ] Add support for more development boards
