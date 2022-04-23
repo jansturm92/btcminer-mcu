@@ -12,16 +12,16 @@
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef MINING_FIRMWARE_LIB_USB_CDC_H
-#define MINING_FIRMWARE_LIB_USB_CDC_H
+#ifndef MINING_FIRMWARE_LIB_HAL_LIBOPENCM3_USB_H
+#define MINING_FIRMWARE_LIB_HAL_LIBOPENCM3_USB_H
 
 // clang-format off
+#include <stddef.h>
 #include <stdint.h> // include first because of missing stdint.h header in <libopencm3/usb/cdc.h>
 #include <libopencm3/usb/cdc.h>
 #include <libopencm3/usb/usbd.h>
 // clang-format on
 
-usbd_device *usbd_setup(const struct usb_device_descriptor *dev,
-                        usbd_endpoint_callback rx_cb, const char *const *usb_strings);
+void usbd_setup(const char *serial_number, size_t len);
 
-#endif // MINING_FIRMWARE_LIB_USB_CDC_H
+#endif // MINING_FIRMWARE_LIB_HAL_LIBOPENCM3_USB_H

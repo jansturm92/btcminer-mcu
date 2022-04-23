@@ -40,7 +40,7 @@ jobs:
           export LC_ALL=en_US.UTF-8
           pio run
           pio test --without-uploading --without-testing
-          pio check --fail-on-defect=low --fail-on-defect=medium --fail-on-defect=high
+          pio check --fail-on-defect=medium --fail-on-defect=high
 
       - name: Test mining-software
         run: |

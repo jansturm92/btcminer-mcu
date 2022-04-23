@@ -57,20 +57,20 @@ test-mining:
 
 ############################   MINING-FIRMWARE   ##########################
 
-PIO_ENVIRONMENT = disco_f407vg
-MONITOR_PORT = /dev/ttyUSB0
+PIO_ENV ?= disco_f407vg
+MONITOR_PORT ?= /dev/ttyUSB0
+
+show-pio-envs:
+	cd mining-firmware
+	pio project config
 
 flash-firmware:
 	cd mining-firmware
-	pio run -e $(PIO_ENVIRONMENT) -t upload
-
-debug-firmware:
-	cd mining-firmware
-	pio run -e $(PIO_ENVIRONMENT):debug -t upload
+	pio run -e $(PIO_ENV) -t upload
 
 test-firmware:
 	cd mining-firmware
-	pio test -e $(PIO_ENVIRONMENT)
+	pio test -e $(PIO_ENV)
 
 monitor-firmware:
 	cd mining-firmware
@@ -78,4 +78,4 @@ monitor-firmware:
 
 check-firmware:
 	cd mining-firmware
-	pio check --fail-on-defect=low --fail-on-defect=medium --fail-on-defect=high
+	pio check --fail-on-defect=medium --fail-on-defect=high

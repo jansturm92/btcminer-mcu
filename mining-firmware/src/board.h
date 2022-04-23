@@ -12,24 +12,27 @@
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "unittest_transport.h"
+#ifndef MINING_FIRMWARE_SRC_BOARD_H
+#define MINING_FIRMWARE_SRC_BOARD_H
 
-void unittest_uart_begin(void) {
+#include "util.h"
 #ifdef LIBOPENCM3
-    usart_setup();
+#include "libopencm3_util.h"
+#else
+#error "Choose a framework"
 #endif
-}
 
-void unittest_uart_putchar(char c) {
-#ifdef LIBOPENCM3
-    usart_wait_send_ready(UNITTEST_USART);
-    if (c == '\n') {
-        usart_send_blocking(UNITTEST_USART, '\r');
-    }
-    usart_send_blocking(UNITTEST_USART, c);
+#define MINER_STATUS_IDLE 0
+#define MINER_STATUS_PROCESSING 1
+
+void board_setup(MINING_CTX *ctx);
+void board_set_status(int);
+int board_get_status(void);
+void board_showsuccess(void);
+
+#ifdef USART_DEBUG
+uint32_t board_hashrate(uint16_t (*check_hash)(void));
+void board_print_welcome(MINING_CTX *ctx, uint32_t hashrate);
 #endif
-}
 
-void unittest_uart_flush(void) {}
-
-void unittest_uart_end(void) {}
+#endif // MINING_FIRMWARE_SRC_BOARD_H

@@ -13,8 +13,11 @@
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "usb-cdc.h"
-#include <stdlib.h>
+#ifdef IO_USB_CDC
+
+#include "libopencm3_usb.h"
+#include "libopencm3_util.h"
+#include <string.h>
 
 /*
  * This notification endpoint isn't implemented. According to CDC spec it's
@@ -164,7 +167,23 @@ static enum usbd_request_return_codes cdcacm_control_request(
     }
     return USBD_REQ_NOTSUPP;
 }
-static usbd_endpoint_callback cdcacm_data_rx_cb;
+
+uint8_t rx_buf[48];
+/**
+ * @brief RX callback for CDC device, that reads data from mining software.
+ * @details Writes 48 bytes = [midstate (32B) | timestamp (4B) | bits (4B) | nonce (4B)]
+ *          into #rx_buf buffer and executes post-processing callback.
+ * @param usbd_dev the usb device handle returned from usbd_setup()
+ * @param ep unused
+ */
+static void cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep) {
+    (void)ep;
+
+    if (usbd_ep_read_packet(usbd_dev, 0x01, rx_buf, 48) != 48)
+        return;
+    board_read_data((const char *)rx_buf, sizeof(rx_buf));
+}
+
 static void cdcacm_set_config(usbd_device *usbd_dev, uint16_t wValue) {
     (void)wValue;
 
@@ -177,18 +196,54 @@ static void cdcacm_set_config(usbd_device *usbd_dev, uint16_t wValue) {
                                    cdcacm_control_request);
 }
 
+char i_serial_number[32];
+/// USB string descriptors
+static const char *usb_strings[] = {
+    BOARD_NAME,              // iManufacturer
+    USB_DESCRIPTOR_IPRODUCT, // iProduct
+    i_serial_number,         // iSerialNumber
+};
+
+static usbd_device *usbd_dev;
+
+static const struct usb_device_descriptor dev_descriptor = {
+    .bLength = USB_DT_DEVICE_SIZE,
+    .bDescriptorType = USB_DT_DEVICE,
+    .bcdUSB = 0x0200,
+    .bDeviceClass = USB_CLASS_CDC,
+    .bDeviceSubClass = 0,
+    .bDeviceProtocol = 0,
+    .bMaxPacketSize0 = 64,
+    .idVendor = USB_VENDOR_ID,
+    .idProduct = USB_PRODUCT_ID,
+    .bcdDevice = 0x0200,
+    .iManufacturer = 1,
+    .iProduct = 2,
+    .iSerialNumber = 3,
+    .bNumConfigurations = 1,
+};
+
+/// USB interrupt handler
+// cppcheck-suppress unusedFunction
+void otg_fs_isr(void) { usbd_poll(usbd_dev); }
+
+int board_send_data(const uint8_t *data, const int len) {
+    while (usbd_ep_write_packet(usbd_dev, 0x82, data, len) == 0)
+        ;
+    return len;
+}
+
 /**
  * @brief Initializes a virtual serial device via USB.
- * @param dev Pointer to USB device descriptor.
- * @param rx_cb Function that will be called when data is available to read.
- * @param usb_strings Pointer to an array of three USB string descriptors.
- * @return The initialized usb device.
+ * @param serial_number[in] Pointer to serial number buffer
+ * @param sn_len Length of serial number buffer in bytes
  */
-usbd_device *usbd_setup(const struct usb_device_descriptor *dev,
-                        usbd_endpoint_callback rx_cb, const char *const *usb_strings) {
-    cdcacm_data_rx_cb = rx_cb;
-    usbd_device *usbd_dev = usbd_init(&otgfs_usb_driver, dev, &config, usb_strings, 3,
-                                      usbd_control_buffer, sizeof(usbd_control_buffer));
+void usbd_setup(const char *serial_number, size_t sn_len) {
+
+    if (serial_number != NULL)
+        memcpy(i_serial_number, serial_number, MIN(sizeof(i_serial_number), sn_len));
+    usbd_dev = usbd_init(&otgfs_usb_driver, &dev_descriptor, &config, usb_strings, 3,
+                         usbd_control_buffer, sizeof(usbd_control_buffer));
     usbd_register_set_config_callback(usbd_dev, cdcacm_set_config);
-    return usbd_dev;
 }
+#endif

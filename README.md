@@ -25,8 +25,7 @@ As illustrated, the mining software polls *bitcoind* for a block template, which
 
 ##### MCU MINER
 In general any MCU or development board can be used as a mining device, as long as it supports basic I/O. Additionally, the firmware needs a corresponding mining device class in the miner software that implements the interface `MiningDevice` (see [mining_device.py](/mining-software/mining_device.py)).
-At its core, the MCU receives work from the mining software over some I/O interface and will try to find a valid nonce as long as no new data is received or the full 32 bit range of the nonce is depleted. On success it will send back the nonce to the mining software.
-
+At its core, the MCU receives work from the mining software over some I/O interface via an interrupt and will try to find a valid nonce as long as no new data is received or the full 32 bit range of the nonce is depleted. On success it will send back the nonce to the mining software.
 
 ## Setup
 
@@ -37,11 +36,21 @@ At its core, the MCU receives work from the mining software over some I/O interf
 - For serial communication make sure that you have permissions to access the serial port, e.g. temporarily with `sudo chmod 666 /dev/ttyACM0` or permanently by adding your user to the `dialout` or `uucp` group (e.g. `sudo usermod -a -G uucp $USER`).
 
 ### Supported Hardware
-More devices will be added in future releases. So far only the STM32F4DISCOVERY board is supported. However, it is relatively simple to add support for more STM32 devices with only a few changes to the firmware code (see also [stm32-util](mining-firmware/lib/stm32_util)).
+So far only some STM32 Discovery boards are supported. However, thanks to the hardware abstraction layer, it is relatively simple to add support for more STM32 devices with only a few changes to the firmware code.
 
-- **[STM32F4DISCOVERY](https://docs.platformio.org/en/latest/boards/ststm32/disco_f407vg.html)** (platformio env: `disco_f407vg`, hashrate: 12 kH/sec)
-  - **Details**: The firmware is based on [libopencm3](https://github.com/libopencm3/libopencm3) using the USB CDC ACM protocol to emulate a serial port over USB. When the mining software sends data, it will be received through a callback that is invoked by the USB stack interrupt handler. This ensures that the miner will always operate on the newest available blockheader without any delay.
-  - **Setup**: For flashing the firmware connect USB cable 'Type-A to Mini-B' through USB connector CN1. Use the USB Micro-AB connector CN5 for the virtual COM port. Optional serial output is provided by the USART2 port (TX=PA2, RX=PA3).
+##### Platform: ST STM32
+Framework: [libopencm3](https://github.com/libopencm3/libopencm3)
+- **[STM32F4DISCOVERY](https://docs.platformio.org/en/latest/boards/ststm32/disco_f407vg.html)** (platformio env: `disco_f407vg`, hashrate: 22 kH/sec)  
+  **I/O**: Uses the USB CDC ACM protocol to emulate a serial port over USB. When the mining software sends data, it will be received through a callback that is invoked by the USB stack interrupt handler.  
+  **Setup**: For flashing the firmware connect USB cable 'Type-A to Mini-B' through USB connector CN1. Use the USB Micro-AB connector CN5 for the virtual COM port. Optional serial debugging output is provided by the USART2 port (TX=PA2, RX=PA3).
+
+- **[STM32 B-L475E-IOT01A Discovery kit](https://docs.platformio.org/en/stable/boards/ststm32/disco_l475vg_iot01a.html)** (platformio env: `disco_l475vg_iot01a`, hashrate: 10 kH/sec)  
+  **I/O**: Uses USART interface for serial data communication with mining software.  
+  **Setup**: Connect USB cable 'Type-A to Micro-B' through USB connector CN7 (USB ST-LINK) for flashing the firmware and USART1 data connection. Optional serial debugging output is provided by the USART2 port via PMOD connector CN10 (TX=PMOD Pin 1, RX=PMOD Pin 3).  
+
+- **[STM32F0DISCOVERY](https://docs.platformio.org/en/latest/boards/ststm32/disco_f051r8.html)** (platformio env: `disco_f051r8`, hashrate: 4 kH/sec)  
+  **I/O**: Uses USART interface for serial data communication with mining software.  
+  **Setup**: For flashing the firmware connect USB cable 'Type-A to Mini-B' through USB connector CN1. Use USART2 port for data communication (TX=PA2, RX=PA3).
 
 If you don't have any of the mentioned hardware, it is possible to enable an MCU simulator in the config of the mining software.
 
@@ -55,12 +64,12 @@ For convenience, check out the provided `Makefile` that bundles common tasks int
 
 
 ### mining-firmware
-Set `LOG_LEVEL=0` in `platformio.ini` to deactivate serial output.
+Set `LOG_LEVEL=0` in `platformio.ini` to deactivate serial output or `LOG_LEVEL=2` for verbose serial output.
 
-`make flash-firmware`: Build and flash firmware.  
-`make debug-firmware`: Build and flash firmware with debugging symbols and verbose serial output enabled.  
-`make test-firmware`: Build and run unittests on device.  
-`make monitor-firmware`: Monitor device output.
+`make show-pio-envs`: Print available PlatformIO environments.  
+`make flash-firmware PIO_ENV=<env>`: Build and flash firmware for environment `env`.  
+`make test-firmware PIO_ENV=<env>`: Build and run unittests on device for environment `env`.  
+`make monitor-firmware MONITOR_PORT=<port>`: Monitor device output at port `port`.
 
 
 ### mining-software

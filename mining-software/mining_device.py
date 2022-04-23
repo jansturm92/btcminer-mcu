@@ -211,7 +211,7 @@ class SimulatorMiningDevice(MiningDevice):
 def create_device(config_device: dict) -> MiningDevice:
     if config_device["type"] == "serial":
         return SerialMiningDevice(
-            name="STM32F4DISCOVERY",  # TODO read from USB descriptor
+            name=config_device["name"],  # TODO read from USB descriptor if not given
             port=config_device["port"],
             baudrate=config_device["baudrate"],
             read_timeout=config_device["read_timeout"],

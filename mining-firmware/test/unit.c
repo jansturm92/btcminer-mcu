@@ -12,10 +12,16 @@
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <http://www.gnu.org/licenses/>.
 
+#include <libopencm3_util.h>
 #include <sha256d.h>
-#include <stm32_util.h>
 #include <string.h>
 #include <unity.h>
+
+// simple workaround to avoid linking issues
+void board_read_data(const char *buf, const int len) {
+    (void)buf;
+    (void)len;
+}
 
 static void hex2bin(uint8_t *bin, const char *hex) {
     int v = 0;
@@ -95,9 +101,10 @@ void tearDown(void) {}
 
 int main(void) {
 
-    stm32_board_setup();
-    sleep(STM32_UNITTEST_INITIAL_SLEEP_DURATION);
-
+#ifdef LIBOPENCM3
+    libopencm3_board_setup(NULL, 0);
+#endif
+    sleep(UNITTEST_INITIAL_SLEEP_DURATION);
     UNITY_BEGIN();
 
     RUN_TEST(test_sha256d);

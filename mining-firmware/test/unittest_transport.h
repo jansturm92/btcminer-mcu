@@ -19,6 +19,10 @@
 extern "C" {
 #endif
 
+#ifdef LIBOPENCM3
+#include <libopencm3_util.h>
+#endif
+
 void unittest_uart_begin(void);
 void unittest_uart_putchar(char c);
 void unittest_uart_flush(void);
