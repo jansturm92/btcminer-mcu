@@ -12,7 +12,7 @@ jobs:
       - name: Setup python3
         uses: actions/setup-python@v2
         with:
-          python-version: '3.6'
+          python-version: '3.7'
           cache: 'pip'
 
       - name: Setup locales

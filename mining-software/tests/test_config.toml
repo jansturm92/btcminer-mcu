@@ -1,8 +1,8 @@
-# comment this section to use device from main config as DUT
-[device]
+# comment this section to use devices from main config as DUT
+[[devices]]
 type = "simulator"
-timeout = 0
-avg_delay = 0
+name = "STM32 Simulator (very fast)"
+avg_delay = 1
 
 # BTC block #222222
 [[blocks]]

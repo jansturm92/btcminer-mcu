@@ -1,34 +1,37 @@
 # use 'python miner.py --help' for more details
 
-[device]
+timeout = 10 # time in seconds to wait for a valid nonce from all devices
+
+[[devices]]
 name = "STM32F4DISCOVERY"
 type = "serial"
 port = "/dev/ttyACM0"
 baudrate = 115200
-read_timeout = 10 # seconds
 write_timeout = 3 # seconds
 
-#[device]
-#name = "STM32L4DISCOVERY_IOT01A"
-#type = "serial"
-#port = "/dev/ttyACM0"
-#baudrate = 9600
-#read_timeout = 10 # seconds
-#write_timeout = 3 # seconds
+[[devices]]
+name = "STM32L4DISCOVERY_IOT01A"
+type = "serial"
+port = "/dev/ttyACM1"
+baudrate = 9600
+write_timeout = 3 # seconds
 
-#[device]
-#name = "STM32F0DISCOVERY"
-#type = "serial"
-#port = "/dev/ttyUSB0"
-#baudrate = 38400
-#read_timeout = 10 # seconds
-#write_timeout = 3 # seconds
+[[devices]]
+name = "STM32F0DISCOVERY"
+type = "serial"
+port = "/dev/ttyUSB0"
+baudrate = 38400
+write_timeout = 3 # seconds
 
+[[devices]]
+type = "simulator"
+name = "STM32 Simulator (fast)"
+avg_delay = 5
 
-#[device]
-#type = "simulator"
-#timeout = 3
-#avg_delay = 1
+[[devices]]
+type = "simulator"
+name = "STM32 Simulator (very slow)"
+avg_delay = 10000000
 
 [rpc]
 server = "localhost:8332"
@@ -36,7 +39,7 @@ username = "user"
 password = "pass"
 
 [coinbase]
-message = "str:Mined with STM32 Discovery Board"
+message = "str:Mined with microcontroller unit"
 address = "2N2Se6a3H1HCnAAi7piFrRrk4guiTk58nm9"
 
 [logging]

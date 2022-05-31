@@ -11,16 +11,16 @@
 #
 #  You should have received a copy of the GNU General Public License along with
 #  this program.  If not, see <http://www.gnu.org/licenses/>.
-
+import asyncio
+import copy
 import json
 import unittest
 from pathlib import Path
-import copy
 
 import toml
 
-from miner import BlockTemplate, Miner
 from config_loader import miner_config
+from miner import BlockTemplate, Miner
 from sha256d_ms import calculate_midstate
 
 
@@ -91,39 +91,29 @@ class TestMiner(unittest.TestCase):
 
     def test_mining_valid_share(self):
         miner = Miner(config=self.test_config)
-        miner.connect_device()
         for test in self.data:
             with self.subTest(msg=f"BTC Block #{test['block']['height']}"):
                 nonce_expected = test["block"]["nonce"]
                 # only a few nonce iterations until correct nonce is found
-                nonce = miner.mine(test["template"], hex(nonce_expected - 100))
+                nonce = asyncio.run(
+                    miner.mine(test["template"], hex(nonce_expected - 100))
+                )
                 self.assertIsNotNone(nonce)
                 self.assertEqual(nonce_expected, int(nonce, 16))
-
-    def test_mining_invalid_share(self):
-        miner = Miner(config=self.test_config)
-        miner.connect_device()
-        for test in self.data:
-            with self.subTest(msg=f"BTC Block #{test['block']['height']}"):
-                nonce_expected = test["block"]["nonce"]
-                # correct nonce is skipped and (likely) a different invalid share will be found
-                nonce = miner.mine(test["template"], hex(nonce_expected + 1))
-                self.assertIsNone(nonce)
 
     def test_mining_timeout(self):
         timeout_config = copy.deepcopy(self.test_config)
         # force instant timeout
-        timeout_config["device"]["timeout"] = 0.001
-        timeout_config["device"]["read_timeout"] = 0.001
-        timeout_config["device"]["avg_delay"] = 100
+        timeout_config["timeout"] = 0.001
 
         miner = Miner(config=timeout_config)
-        miner.connect_device()
         for test in self.data:
             with self.subTest(msg=f"BTC Block #{test['block']['height']}"):
                 nonce_expected = test["block"]["nonce"]
                 # timeout should hit instantly, no nonce is returned
-                nonce = miner.mine(test["template"], hex(nonce_expected - 100))
+                nonce = asyncio.run(
+                    miner.mine(test["template"], hex(nonce_expected - 100))
+                )
                 self.assertIsNone(nonce)
 
     def test_merkle_root(self):

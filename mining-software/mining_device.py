@@ -11,64 +11,48 @@
 #
 #  You should have received a copy of the GNU General Public License along with
 #  this program.  If not, see <http://www.gnu.org/licenses/>.
-
+import asyncio
 import hashlib
 import random
 import struct
-import time
 from abc import ABC, abstractmethod
 
-import serial
+import serial_asyncio
 from serial import SerialException
 
 
 class MiningDevice(ABC):
     """Device interface with abstract methods that must be overridden by the concrete mining device classes"""
 
-    def __init__(
-        self, device_type: str, name: str, read_timeout: float, write_timeout: float
-    ):
+    def __init__(self, device_type: str, name: str):
         self.type = device_type
         self.name = name
-        self.read_timeout = read_timeout
-        self.write_timeout = write_timeout
         self.has_midstate_support = True
 
     def __str__(self):
         return f"<Device '{self.name}' [type={self.type}]>"
 
     @abstractmethod
-    def connect(self) -> None:
+    async def connect(self) -> None:
         """
-        Establishes a connection to the device. If the device is already connected, this function has no effect.
+        Establishes a connection to the device.
         :raises DeviceConnectionError
         """
         pass
 
     @abstractmethod
-    def disconnect(self) -> None:
-        """Close the connection to the device"""
-        pass
-
-    @abstractmethod
-    def is_connected(self) -> bool:
-        """Checks if device is connected"""
-        pass
-
-    @abstractmethod
-    def write(self, data: bytes) -> int:
+    async def write(self, data: bytes) -> None:
         """
         Sends data of type 'bytes' to the device
         :param data: bytes to be sent
         :raises DeviceConnectionError for any connection issue or if an optional write-timeout is exceeded.
-        :return: number of bytes sent
         """
         pass
 
     @abstractmethod
-    def read(self, size: int) -> bytes:
+    async def read(self, size: int) -> bytes:
         """
-        Reads size bytes from the device. May return fewer bytes than requested if the read_timeout is exceeded.
+        Reads size bytes from the device.
         :param size:
         :raises DeviceConnectionError for any connection issue
         :return: bytes read from the device
@@ -93,7 +77,6 @@ class SerialMiningDevice(MiningDevice):
     :param name: an arbitrary name for the device (shown in logs)
     :param port: the serial port (e.g. /dev/tty* on GNU/Linux)
     :param baudrate: baud rate (e.g. 9600, 115200,...)
-    :param read_timeout: read timeout in seconds, i.e. the time available to find a valid share
     :param write_timeout: write timeout in seconds, i.e. the time available to send work to the device
     """
 
@@ -102,75 +85,52 @@ class SerialMiningDevice(MiningDevice):
         name: str,
         port: str,
         baudrate: int,
-        read_timeout: float,
         write_timeout: float,
     ):
-        super().__init__("serial", name, read_timeout, write_timeout)
+        super().__init__("serial", name)
         self.serial = None
+        self.reader = None
+        self.writer = None
         self.port = port
         self.baudrate = baudrate
+        self.write_timeout = write_timeout
 
     def __repr__(self):
         return (
             f"<Device '{self.name}' [type={self.type}, port={self.port}, baudrate={self.baudrate}"
-            f", read_timeout={self.read_timeout}s, write_timeout={self.write_timeout}s]>"
+            f", write_timeout={self.write_timeout}s]>"
         )
 
-    def connect(self) -> None:
+    async def connect(self) -> None:
         try:
-            if self.serial is None:
-                self.serial = serial.Serial(
-                    port=self.port,
-                    baudrate=self.baudrate,
-                    timeout=self.read_timeout,
-                    write_timeout=self.write_timeout,
-                )
-            elif not self.serial.isOpen():
-                self.serial.open()
-
+            self.reader, self.writer = await serial_asyncio.open_serial_connection(
+                url=self.port, baudrate=self.baudrate, write_timeout=self.write_timeout
+            )
         except SerialException as e:
             raise DeviceConnectionError(self, e.strerror)
 
-    def disconnect(self) -> None:
-        if self.serial is not None:
-            self.serial.close()
-
-    def is_connected(self) -> bool:
-        return self.serial and self.serial.isOpen()
-
-    def write(self, data: bytes) -> int:
-        if self.serial is None:
-            raise DeviceConnectionError(
-                self, "device is not connected, call connect() first"
-            )
+    async def write(self, data: bytes) -> None:
         try:
-            return self.serial.write(data)
+            self.writer.write(data)
         except SerialException as e:
             raise DeviceConnectionError(self, e.strerror)
 
-    def read(self, size: int):
-        if self.serial is None:
-            raise DeviceConnectionError(
-                self, "device is not connected, call connect() first"
-            )
+    async def read(self, size: int):
         try:
-            return self.serial.read(size)
+            return await self.reader.readexactly(4)
         except SerialException as e:
             raise DeviceConnectionError(self, e.strerror)
 
 
 class SimulatorMiningDevice(MiningDevice):
-    def __init__(self, name: str, avg_delay: float, timeout: float):
-        super().__init__("simulator", name, timeout, timeout)
+    def __init__(self, name: str, avg_delay: float):
+        super().__init__("simulator", name)
         self.avg_delay = avg_delay
         self.data = b""
         self.has_midstate_support = False
 
     def __repr__(self):
-        return (
-            f"<Device '{self.name}' [type={self.type}, avg_delay={self.avg_delay}s"
-            f", read_timeout={self.read_timeout}s, write_timeout={self.write_timeout}s]>"
-        )
+        return f"<Device '{self.name}' [type={self.type}, avg_delay={self.avg_delay}s]>"
 
     @staticmethod
     def _scanhash(header: bytes) -> int:
@@ -185,26 +145,16 @@ class SimulatorMiningDevice(MiningDevice):
             nonce += 1
         return nonce
 
-    def connect(self) -> None:
+    async def connect(self) -> None:
         pass
 
-    def disconnect(self) -> None:
-        pass
-
-    def is_connected(self) -> bool:
-        return True
-
-    def write(self, data):
+    async def write(self, data) -> None:
         self.data = data
 
-    def read(self, size):
+    async def read(self, size):
         # add up to +-2 seconds of delay for some randomness
         delay = self.avg_delay + (random.uniform(-2, 2) if self.avg_delay > 2 else 0)
-        if self.read_timeout < delay:
-            time.sleep(self.read_timeout)
-            return b""
-
-        time.sleep(delay)
+        await asyncio.sleep(delay)
         return struct.pack(">L", self._scanhash(self.data))
 
 
@@ -214,12 +164,10 @@ def create_device(config_device: dict) -> MiningDevice:
             name=config_device["name"],  # TODO read from USB descriptor if not given
             port=config_device["port"],
             baudrate=config_device["baudrate"],
-            read_timeout=config_device["read_timeout"],
             write_timeout=config_device["write_timeout"],
         )
 
     return SimulatorMiningDevice(
-        name="STM32 Simulator",
-        timeout=config_device["timeout"],
+        name=config_device["name"],
         avg_delay=config_device["avg_delay"],
     )

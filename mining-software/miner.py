@@ -11,7 +11,7 @@
 #
 #  You should have received a copy of the GNU General Public License along with
 #  this program.  If not, see <http://www.gnu.org/licenses/>.
-
+import asyncio
 import hashlib
 import json
 import signal
@@ -194,7 +194,7 @@ class BlockTemplate:
             f"txid={self.template['transactions'][0]['txid']}]>"
         )
 
-    def block_header(self, nonce: str) -> bytes:
+    def block_header(self, nonce: Optional[str]) -> bytes:
         """
         Assembles the 80 byte block header in the following format:
         [version (4B) | previous_block_hash (32B) | merkle_root (32B) | timestamp (4B) | bits (4B) | nonce (4B)].
@@ -243,73 +243,141 @@ class BlockTemplate:
 
 class Miner:
     """
-    Class that manages the mining process and handles the communication between the RPC server and the mining device.
+    Class that manages the mining process and handles the communication between the RPC server and the mining device(s).
 
     :param config: miner config (see also config.toml)
     """
 
     def __init__(self, config: dict):
         self.config = config
-        self.device = mining_device.create_device(config["device"])
+
+        self.devices: list[mining_device.MiningDevice] = []
+        if "devices" not in config:
+            raise MinerError("Please specify at least one mining device")
+        for dev_conf in config["devices"]:
+            device = mining_device.create_device(dev_conf)
+            logger.info(f"Adding {repr(device)}")
+            self.devices.append(device)
+
         self.rpc = config["rpc"]
         self.rpc_url = (
             f"http://{self.rpc['username']}:{self.rpc['password']}@{self.rpc['server']}"
         )
 
-    def mine(
-        self, block_template: BlockTemplate, nonce_start: Optional[str] = None
-    ) -> Optional[str]:
-        """
-        Starts the mining process on the mining device.
+        self.mining_timeout = config["timeout"]
 
-        After reception of a share the block hash needs to be checked against the actual target hash of the block,
-        to determine if it is a valid proof of work for the block.
-        Make sure a connection to the device was established (see self.connect_device()).
+    @staticmethod
+    def check_nonce(block_template: BlockTemplate, nonce: str) -> bool:
+        """
+        Checks if the given nonce produces a valid proof of work for the given block
 
         :param block_template: the block template for the current block to be mined
-        :param nonce_start: optional nonce for the mining device to start iterating from (in big endian hex format)
-        :raises DeviceConnectionError if there are connection issues with the mining device
-        :raises MinerError for some critical error during mining
-        :return: nonce if a valid proof of work was found for this block
-                 None if the share is invalid for this block (block hash > target hash)
-                      if a device timeout was triggered (indicates no valid share was found by the mining device)
+        :param nonce: nonce in hex format (big endian)
+        :return: True if valid, else False
         """
+        block_hash = block_template.block_header_hash(nonce)
         target_hash = block_template.target_hash()
-        block_header = block_template.block_header(nonce_start)
+        logger.debug(
+            f"\t{block_template.block_info()} block_hash  = {block_hash.hex()}"
+        )
+        logger.debug(
+            f"\t{block_template.block_info()} target_hash = {target_hash.hex()}"
+        )
+        return block_hash <= target_hash
 
-        logger.info(f"sending work for {block_template.block_info()} to {self.device}")
-        logger.debug(f"\tblock header = {block_header.hex()}")
+    async def mine_coroutine(
+        self,
+        device: mining_device.MiningDevice,
+        block_template: BlockTemplate,
+        midstate: bytes,
+        block_header: bytes,
+    ) -> Optional[str]:
+        """
+        Coroutine that handles the mining process on a single device.
 
-        if self.device.has_midstate_support:
-            data = calculate_midstate(block_header)
-            logger.debug(f"\tmidstate = {data.hex()}")
-            data += swap32_buffer(block_header[64:])
-            self.device.write(data)
-        else:
-            self.device.write(block_header)
+        After reception of a share, the block hash needs to be checked against the actual target hash of the block,
+        to determine if it is a valid proof of work for the block.
 
-        logger.info(f"waiting for response from {self.device}")
-        response = self.device.read(size=4)
-        if len(response):
-            nonce = response.hex()
-            logger.info(f"\treceived share (nonce = 0x{nonce}) from {self.device}")
+        :param device:         the device to mine on
+        :param block_template: the block template for the current block to be mined
+        :param midstate:       the SHA256 midstate for the first 64-byte chunk of block header data
+        :param block_header:   80 byte block header in little endian
+        :return: nonce iff a valid proof of work was found for this block
+        """
+        try:
+            logger.info(f"Starting Mining Task for {device}")
+            await device.connect()
+            if device.has_midstate_support:
+                await device.write(midstate + swap32_buffer(block_header[64:]))
+            else:
+                await device.write(block_header)
+            while True:
+                response = await device.read(size=4)
+                if len(response) == 4:
+                    nonce = response.hex()
+                    logger.debug(f"\tReceived share (nonce = 0x{nonce}) from {device}")
+                    if self.check_nonce(block_template, nonce):
+                        logger.info(
+                            f"\x1b[33;1m>>> {device} found a valid hash for {block_template.block_info()}\x1b[0m"
+                        )
+                        return nonce
+                    logger.debug("\tShare invalid (block_hash > target_hash)")
 
-            block_hash = block_template.block_header_hash(nonce)
-            logger.info(
-                f"\t{block_template.block_info()} block_hash  = {block_hash.hex()}"
-            )
-            logger.info(
-                f"\t{block_template.block_info()} target_hash = {target_hash.hex()}"
-            )
-            if block_hash <= target_hash:
-                logger.info(
-                    f"\x1b[33;1m>>> Found a valid hash for {block_template.block_info()}\x1b[0m"
+        except asyncio.CancelledError:
+            logger.debug(f"Cancelling Mining Task for {device}")
+        except mining_device.DeviceConnectionError as e:
+            logger.error(e)
+            logger.debug(f"\t{e.detail}")
+            await asyncio.sleep(10)
+        finally:
+            logger.debug(f"Exiting Mining Task for {device}")
+
+    async def mine(
+        self,
+        block_template: BlockTemplate,
+        nonce_start: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Starts the mining process on all available mining devices, by creating a separate mining task for each device.
+
+        All devices are mining the same block concurrently, each with a different starting nonce.
+        If any device finds a valid nonce, all other tasks are cancelled immediately.
+        If no device finds a valid nonce before a mining timeout, all tasks are cancelled.
+
+        :param block_template: the block template for the current block to be mined
+        :param nonce_start: optional nonce to start iterating from (in big endian hex format)
+        :return: nonce if a valid proof of work was found for this block, else None (timeout)
+        """
+        midstate = calculate_midstate(block_template.block_header(None))
+        logger.debug(f"\tmidstate = {midstate.hex()}")
+
+        nonce_end = 2**32 - 1
+        nonce_start = int(nonce_start, 16) if nonce_start else 0
+        nonce_incr = int((nonce_end - nonce_start) / len(self.devices))
+        nonces = [hex(nonce_start + i * nonce_incr) for i in range(len(self.devices))]
+        logger.debug(f"\tstarting nonces = {nonces}")
+
+        # create task for each device
+        mining_tasks = [
+            asyncio.create_task(
+                self.mine_coroutine(
+                    device=device,
+                    block_template=block_template,
+                    midstate=midstate,
+                    block_header=block_template.block_header(nonce),
                 )
-                return nonce
+            )
+            for nonce, device in zip(nonces, self.devices)
+        ]
+        done, _ = await asyncio.wait(
+            mining_tasks,
+            timeout=self.mining_timeout,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if len(done):
+            return next(iter(done)).result()
 
-            logger.info("Share invalid (block_hash > target_hash)")
-        else:
-            logger.info(f"\tresponse timeout")
+        logger.info("Mining timeout")
         return None
 
     def get_block_template(self) -> BlockTemplate:
@@ -324,7 +392,7 @@ class Miner:
         while True:
             try:
                 rpc = AuthServiceProxy(service_url=self.rpc_url)
-                logger.info(f"RPC<{self.rpc['server']}> getblocktemplate()")
+                logger.debug(f"RPC<{self.rpc['server']}> getblocktemplate()")
                 block_template = BlockTemplate(
                     template=rpc.getblocktemplate({"rules": ["segwit"]}),
                     cb_config=self.config["coinbase"],
@@ -340,7 +408,7 @@ class Miner:
                 raise MinerError(e)
 
     def submit_block(self, block: str) -> bool:
-        f"""
+        """
         Calls the submitblock JSON-RPC method to submit the newly created block with valid proof of work.
 
         For connection errors to the server, there will be 10 attempts to submit the data with 5 seconds in between.
@@ -353,7 +421,7 @@ class Miner:
         attempts = 10
         while True:
             try:
-                logger.info(f"RPC<{self.rpc['server']}> submitblock()")
+                logger.debug(f"RPC<{self.rpc['server']}> submitblock()")
                 rpc = AuthServiceProxy(service_url=self.rpc_url)
                 response = rpc.submitblock(block)
                 if response:
@@ -371,24 +439,14 @@ class Miner:
                 )
                 time.sleep(5)
 
-    def connect_device(self) -> None:
-        if not self.device.is_connected():
-            logger.info(f"Connecting to {repr(self.device)}")
-            self.device.connect()
-
-    def disconnect_device(self) -> None:
-        logger.info(f"Disconnecting {repr(self.device)}")
-        self.device.disconnect()
-
     def start(self) -> None:
         """Starts the mining loop (getblocktemplate -> mining -> submitblock)"""
         logger.info("Starting Miner")
         logger.debug(f"Using config\n{json.dumps(miner_config, indent=4)}")
         while True:
             try:
-                self.connect_device()
                 block_template = self.get_block_template()
-                nonce = self.mine(block_template)
+                nonce = asyncio.run(self.mine(block_template))
                 if nonce:
                     if self.submit_block(block_template.create_block(nonce)):
                         logger.info(
@@ -398,29 +456,22 @@ class Miner:
                             f"\x1b[33;1m>>> {block_template.reward_info()}\x1b[0m"
                         )
 
-            except mining_device.DeviceConnectionError as e:
-                logger.error(e)
-                logger.debug(f"\t{e.detail}")
-                time.sleep(3)
             except MinerError as e:
                 logger.critical(e)
                 break
-
-    def stop(self) -> None:
-        """Gracefully stop the mining process."""
-        self.disconnect_device()
-        logger.info("Shutting down Miner")
 
 
 def main():
     signal.signal(signal.SIGTERM, lambda x, y: sys.exit(0))
     signal.signal(signal.SIGINT, lambda x, y: sys.exit(0))
 
-    miner = Miner(miner_config)
     try:
+        miner = Miner(miner_config)
         miner.start()
+    except MinerError as e:
+        logger.critical(e)
     finally:
-        miner.stop()
+        logger.info("Shutting down Miner")
 
 
 if __name__ == "__main__":

@@ -59,17 +59,18 @@ static inline uint16_t check_hash(void) {
 /**
  * @brief main loop of miner that continuously performs block header hashing as long as
  *        the miner is in processing state.
- * @details On each iteration the nonce in the block header is incremented and hashing is
- *          performed until a valid nonce is found or nonce=2^32-1. New work from the
- *          mining software can be received anytime because of the USB interrupt.
+ * @details On each iteration the nonce in the block header is incremented. Hashing is
+ *          performed until nonce=2^32-1. Each valid nonce will be send back to the mining
+ *          software. New work can be received anytime via an interrupt.
  */
 static void __attribute__((__noreturn__)) scanhash_loop(void) {
     while (1) {
         if (board_get_status()) {
-            if (*nonce == 0xFFFFFFFF || check_hash() == 0) {
+            if (*nonce == 0xFFFFFFFF) {
+                board_set_status(MINER_STATUS_IDLE);
+            } else if (check_hash() == 0) {
                 LOG_INFO("<<<SUCCESS>> found nonce '0x%08lx'\n", BSWAP32(*nonce));
                 LOG_INFO("hash = xxxx....xxxx%08lx\n", ((uint32_t *)hash)[7]);
-                board_set_status(MINER_STATUS_IDLE);
                 // sends nonce (big endian) back to the mining software
                 board_send_data((uint8_t *)nonce, 4);
                 board_showsuccess();

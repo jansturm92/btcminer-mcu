@@ -21,8 +21,27 @@ import toml
 
 miner_config = toml.load(Path(__file__).with_name("config.toml"))
 
+
+def check_positive_int(val):
+    ival = int(val)
+    if ival <= 0:
+        raise argparse.ArgumentTypeError(
+            f"argument must be a positive integer (given: {val})"
+        )
+    return ival
+
+
 parser = argparse.ArgumentParser(
     argument_default=argparse.SUPPRESS, usage="%(prog)s [options]"
+)
+
+# mining timeout
+parser.add_argument(
+    "--timeout",
+    metavar="<seconds>",
+    dest="timeout",
+    type=check_positive_int,
+    help=f"time in seconds to wait for a valid nonce from all devices (default '{miner_config['timeout']}')",
 )
 
 # [rpc]
@@ -77,5 +96,8 @@ parser.add_argument(
 
 # overwrite config file values with argparse values
 for dest, value in vars(parser.parse_args()).items():
-    group, key = dest.split(".")
-    miner_config[group].update({key: value})
+    if "." in dest:
+        group, key = dest.split(".")
+        miner_config[group].update({key: value})
+    else:
+        miner_config.update({dest: value})

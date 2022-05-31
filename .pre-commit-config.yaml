@@ -7,7 +7,6 @@ repos:
         args: [--markdown-linebreak-ext=md]
     -   id: end-of-file-fixer
     -   id: check-toml
-    -   id: check-yaml
 -   repo: https://github.com/psf/black
     rev: 22.3.0
     hooks:
@@ -22,4 +21,4 @@ repos:
     rev: 55f159a
     hooks:
       - id: vermin
-        args: ['-t=3.6', '--violations']
+        args: ['-t=3.7', '--violations']

@@ -6,10 +6,10 @@
 ## Overview
 Mining via Proof of Work (PoW) secures the Bitcoin network and allows nodes to reach consensus. During this process miners validate transactions and are rewarded with newly minted bitcoin if they find a solution to the computationally-intense PoW puzzle. Mining hardware that solves this puzzle has become very sophisticated over the years, resulting in highly-efficient ASIC miners with hashrates of several TH/sec that collaborate in large mining pools.
 
-However this project looks at the very lower end of mining devices, where the PoW calculations are performed on a **microcontroller unit (MCU)**. With the current network difficulty this strategy is obviously *not profitable* and the MCU miner will certainly not find a valid PoW. Nevertheless it's fun, cheap and you can learn a lot about some of the inner workings of Bitcoin.
+However this project looks at the very lower end of mining devices, where the PoW calculations are performed on one or more **microcontroller units (MCU)**. With the current network difficulty this strategy is obviously *not profitable* and the MCU miner will certainly not find a valid PoW. Nevertheless it's fun, cheap and you can learn a lot about some of the inner workings of Bitcoin.
 
 ### Solo Mining Workflow
-<img src="img/solo_mining_mcu.jpg">
+<img src="img/solo_mining_mcu.png">
 
 We focus on solo mining where the miner tries to create new blocks on its own (as opposed to pooled mining where miners pool their resources to find blocks more often).
 
@@ -21,16 +21,16 @@ For developing and testing new applications we prefer Bitcoin Core's **regtest**
 ##### MINING SOFTWARE
 The mining software is built from scratch in python with some usage of [bitcoinlib](https://bitcoinlib.readthedocs.io/en/latest/). Compared to other more sophisticated mining softwares targeting ASICs, e.g. [bfgminer](https://github.com/luke-jr/bfgminer) or [cgminer](https://github.com/ckolivas/cgminer), this version is designed specifically for MCUs with very low hashrates. This simplifies certain assumptions, e.g. no extra nonce is necessary, which results in a constant coinbase transaction and therefore constant merkle root.
 
-As illustrated, the mining software polls *bitcoind* for a block template, which includes a list of new transactions, using the getblocktemplate RPC. Subsequently, it uses this template to create a new block and sends the blockheader to the MCU miner. Upon reception of a nonce, the software validates the nonce against the actual difficulty of the block and, if valid, sends the new block to *bitcoind*. If no nonce was received after a certain timeout exceeds, the mining process continues with a new block template.
+As illustrated, the mining software polls *bitcoind* for a block template, which includes a list of new transactions, using the getblocktemplate RPC. Subsequently, it uses this template to create a new block and sends the blockheader to one or more MCU miners. If more than one miner is connected, different starting nonces will be used in the blockheader. Upon reception of a nonce from any miner, the software validates the nonce against the actual difficulty of the block and, if valid, sends the new block to *bitcoind*. If no valid nonce was received after a certain timeout exceeds, the mining process continues with a new block template.
 
 ##### MCU MINER
 In general any MCU or development board can be used as a mining device, as long as it supports basic I/O. Additionally, the firmware needs a corresponding mining device class in the miner software that implements the interface `MiningDevice` (see [mining_device.py](/mining-software/mining_device.py)).
-At its core, the MCU receives work from the mining software over some I/O interface via an interrupt and will try to find a valid nonce as long as no new data is received or the full 32 bit range of the nonce is depleted. On success it will send back the nonce to the mining software.
+At its core, the MCU receives work from the mining software over some I/O interface via an interrupt and will try to find valid nonces as long as no new data is received or the full 32 bit range of the nonce is depleted. On success it will send back the nonce to the mining software.
 
 ## Setup
 
 ### Software Requirements
-- The mining-software requires `python` >= 3.6.  
+- The mining-software requires `python` >= 3.7.  
   Install the necessary packages, e.g. via `pip3 install -r mining-software/requirements.txt`.
 - The mining-firmware uses [PlatformIO](https://docs.platformio.org/en/latest/core/index.html) as build system. Install the latest PlatformIO Core with `pip3 install -U platformio`.
 - For serial communication make sure that you have permissions to access the serial port, e.g. temporarily with `sudo chmod 666 /dev/ttyACM0` or permanently by adding your user to the `dialout` or `uucp` group (e.g. `sudo usermod -a -G uucp $USER`).
@@ -73,22 +73,22 @@ Set `LOG_LEVEL=0` in `platformio.ini` to deactivate serial output or `LOG_LEVEL=
 
 
 ### mining-software
-The mining software is configured via [config.toml](mining-software/config.toml) or CLI parameters (see `python3 miner.py --help` for more details). CLI arguments will overwrite values defined in `config.toml`.
+The mining software is configured via [config.toml](mining-software/config.toml) or CLI parameters (see `python3 miner.py --help` for more details). CLI arguments will overwrite values defined in `config.toml`. Each mining device has to be added under a separate `[[devices]]` section.
 
 `make start-mining`: Starts the mining software with default parameters defined in `config.toml`.  
 `make test-mining`: Runs the test suite on the device defined in [test_config.toml](mining-software/tests/test_config.toml).  
 
-**Screenshot of regtest solo mining with STM32F4DISCOVERY board** (Click for larger image)
+**Screenshot of regtest solo mining with multiple MCUs** (Click for larger image)
 [![screenshot](img/screenshot.png)](https://raw.githubusercontent.com/jansturm92/btcminer-mcu/master/img/screenshot.png)
-*top:* Logging output of mining-software, *bottom-left:* Serial output of STM32 board, *bottom-right:* Output of bitcoind regtest
+*top:* Logging output of mining-software,  *bottom:* Output of bitcoind regtest
 
 ## Future Releases
 - [ ] Add [longpoll](https://en.bitcoin.it/wiki/BIP_0022#Optional:_Long_Polling) support
 - [ ] Add autodetection of miners
 - [ ] Add support for more development boards
-- [ ] Add support for mining on multiple (different) MCUs at once
 - [ ] Optimize sha256d on stm32 with fast Cortex-M4 assembly code
 - [ ] Add solo mining pool support (e.g. solo.ckpool.org)
+- [ ] calculate combined hashrate of all connected devices
 
 
 ## License
