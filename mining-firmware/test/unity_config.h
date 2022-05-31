@@ -12,24 +12,25 @@
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "unittest_transport.h"
+#ifndef MINING_FIRMWARE_TEST_UNITY_CONFIG_H
+#define MINING_FIRMWARE_TEST_UNITY_CONFIG_H
 
-void unittest_uart_begin(void) {
-#ifdef LIBOPENCM3
-    usart_setup();
+#ifdef __cplusplus
+extern "C" {
 #endif
-}
 
-void unittest_uart_putchar(char c) {
-#ifdef LIBOPENCM3
-    usart_wait_send_ready(UNITTEST_USART);
-    if (c == '\n') {
-        usart_send_blocking(UNITTEST_USART, '\r');
-    }
-    usart_send_blocking(UNITTEST_USART, c);
+void unity_output_start(void);
+void unity_output_char(char c);
+void unity_output_flush(void);
+void unity_output_complete(void);
+
+#define UNITY_OUTPUT_START() unity_output_start()
+#define UNITY_OUTPUT_CHAR(c) unity_output_char(c)
+#define UNITY_OUTPUT_FLUSH() unity_output_flush()
+#define UNITY_OUTPUT_COMPLETE() unity_output_complete()
+
+#ifdef __cplusplus
+}
 #endif
-}
 
-void unittest_uart_flush(void) {}
-
-void unittest_uart_end(void) {}
+#endif // MINING_FIRMWARE_TEST_UNITY_CONFIG_H

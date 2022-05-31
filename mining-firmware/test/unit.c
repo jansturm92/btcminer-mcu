@@ -54,24 +54,24 @@ static void test_sha256d(void) {
     char data0[] = "123456";
     sha256d(actual, (const uint8_t *)data0, strlen(data0));
     hex2bin(expected, "ff7f73b854845fc02aa13b777ac090fb1d9ebfe16c8950c7d26499371dd0b479");
-    TEST_ASSERT(!memcmp(expected, actual, 32))
+    TEST_ASSERT(!memcmp(expected, actual, 32));
 
     ++data0[0];
     sha256d(actual, (const uint8_t *)data0, strlen(data0));
     hex2bin(expected, "ff7f73b854845fc02aa13b777ac090fb1d9ebfe16c8950c7d26499371dd0b479");
-    TEST_ASSERT(memcmp(expected, actual, 32))
+    TEST_ASSERT(memcmp(expected, actual, 32));
 
     hex2bin(header, block_header_222222);
     sha256d(actual, (const uint8_t *)header, sizeof(header));
     hex2bin(expected,
             "78f6e6b279b4f21f251e8ab4c411a5c0b59449b1610b9db4b800000000000000'");
-    TEST_ASSERT(!memcmp(expected, actual, 32))
+    TEST_ASSERT(!memcmp(expected, actual, 32));
 
     hex2bin(header, block_header_555444);
     sha256d(actual, (const uint8_t *)header, sizeof(header));
     hex2bin(expected,
             "42467b7f54df869a0d750b4fb69fa97f12e3c551d4fc16000000000000000000'");
-    TEST_ASSERT(!memcmp(expected, actual, 32))
+    TEST_ASSERT(!memcmp(expected, actual, 32));
 }
 
 static void test_sha256d_ms(void) {
@@ -96,22 +96,21 @@ static void test_sha256d_ms(void) {
     TEST_ASSERT_NOT_EQUAL(0, *(uint32_t *)(hash + 28));
 }
 
-void setUp(void) {}
-void tearDown(void) {}
-
-int main(void) {
+void setUp(void) {
 
 #ifdef LIBOPENCM3
     libopencm3_board_setup(NULL, 0);
 #endif
     sleep(UNITTEST_INITIAL_SLEEP_DURATION);
+}
+void tearDown(void) {}
+
+int main(void) {
+
     UNITY_BEGIN();
 
     RUN_TEST(test_sha256d);
     RUN_TEST(test_sha256d_ms);
 
-    UNITY_END();
-
-    while (1) {
-    }
+    return UNITY_END();
 }

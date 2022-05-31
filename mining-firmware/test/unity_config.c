@@ -12,24 +12,27 @@
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef MINING_FIRMWARE_TEST_UNITEST_TRANSPORT_H
-#define MINING_FIRMWARE_TEST_UNITEST_TRANSPORT_H
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
+#include "unity_config.h"
 #ifdef LIBOPENCM3
 #include <libopencm3_util.h>
 #endif
 
-void unittest_uart_begin(void);
-void unittest_uart_putchar(char c);
-void unittest_uart_flush(void);
-void unittest_uart_end(void);
-
-#ifdef __cplusplus
-}
+void unity_output_start(void) {
+#ifdef LIBOPENCM3
+    usart_setup();
 #endif
+}
 
-#endif // MINING_FIRMWARE_TEST_UNITEST_TRANSPORT_H
+void unity_output_char(char c) {
+#ifdef LIBOPENCM3
+    usart_wait_send_ready(UNITTEST_USART);
+    if (c == '\n') {
+        usart_send_blocking(UNITTEST_USART, '\r');
+    }
+    usart_send_blocking(UNITTEST_USART, c);
+#endif
+}
+
+void unity_output_flush(void) {}
+
+void unity_output_complete(void) {}
