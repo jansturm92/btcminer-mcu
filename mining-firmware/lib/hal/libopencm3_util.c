@@ -92,8 +92,6 @@ static void systick_setup(void) {
 volatile uint32_t sys_count;
 volatile uint32_t overflow_count;
 
-void sys_tick_handler(void) { sys_count++; }
-
 void sleep(uint32_t delay) {
 
     uint32_t wake = sys_count + delay;
@@ -176,16 +174,21 @@ MAKE_USART_ISR(usart1)
 MAKE_USART_ISR(usart2)
 #endif
 
-int board_send_data(const uint8_t *data, const int len) {
+void board_send_data(const uint8_t *data, const int len) {
     int i;
     usart_wait_send_ready(USART_DATA);
     for (i = 0; i < len; i++) {
         usart_send_blocking(USART_DATA, data[i]);
     }
-    return i;
 }
 #endif
 
+void sys_tick_handler(void) {
+    sys_count++;
+#ifdef IO_USART
+    p = buf;
+#endif
+}
 /**
  * @brief Handles all board initialization procedures, e.g. setup of clock, gpios etc.
  * @param[out] serial_number Pointer to serial number output buffer

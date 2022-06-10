@@ -1,6 +1,9 @@
 # use 'python miner.py --help' for more details
 
-timeout = 10 # time in seconds to wait for a valid nonce from all devices
+# time in seconds to wait for a valid nonce from all devices
+timeout = 10
+# if true, all connected serial devices will be probed for mining capabilities
+autodetect = false
 
 [[devices]]
 name = "STM32F4DISCOVERY"

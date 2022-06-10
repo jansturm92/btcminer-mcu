@@ -37,11 +37,19 @@ parser = argparse.ArgumentParser(
 
 # mining timeout
 parser.add_argument(
-    "--timeout",
+    "-t, --timeout",
     metavar="<seconds>",
     dest="timeout",
     type=check_positive_int,
     help=f"time in seconds to wait for a valid nonce from all devices (default '{miner_config['timeout']}')",
+)
+
+# autodetect
+parser.add_argument(
+    "-a, --autodetect",
+    dest="autodetect",
+    action="store_true",
+    help="Enable auto-detection of serial mining devices",
 )
 
 # [rpc]

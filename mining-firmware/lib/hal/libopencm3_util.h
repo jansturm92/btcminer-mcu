@@ -137,7 +137,7 @@ void usart_setup(void);
 void load_serial_number(char *serial_number, size_t len);
 void libopencm3_board_setup(char *serial_number, size_t len);
 extern void board_read_data(const char *buf, int len);
-int board_send_data(const uint8_t *data, int len);
+void board_send_data(const uint8_t *data, int len);
 
 #if LOG_LEVEL > 0
 int _write(int file, char *ptr, int len);

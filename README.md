@@ -30,7 +30,7 @@ At its core, the MCU receives work from the mining software over some I/O interf
 ## Setup
 
 ### Software Requirements
-- The mining-software requires `python` >= 3.7.  
+- The mining-software requires `python` >= 3.9.  
   Install the necessary packages, e.g. via `pip3 install -r mining-software/requirements.txt`.
 - The mining-firmware uses [PlatformIO](https://docs.platformio.org/en/latest/core/index.html) as build system. Install the latest PlatformIO Core with `pip3 install -U platformio`.
 - For serial communication make sure that you have permissions to access the serial port, e.g. temporarily with `sudo chmod 666 /dev/ttyACM0` or permanently by adding your user to the `dialout` or `uucp` group (e.g. `sudo usermod -a -G uucp $USER`).
@@ -52,7 +52,7 @@ Framework: [libopencm3](https://github.com/libopencm3/libopencm3)
   **I/O**: Uses USART interface for serial data communication with mining software.  
   **Setup**: For flashing the firmware connect USB cable 'Type-A to Mini-B' through USB connector CN1. Use USART2 port for data communication (TX=PA2, RX=PA3).
 
-If you don't have any of the mentioned hardware, it is possible to enable an MCU simulator in the config of the mining software.
+If you don't have any of the mentioned hardware, it is possible to enable MCU simulators in the config of the mining software.
 
 ## Usage
 For convenience, check out the provided `Makefile` that bundles common tasks into simple shortcuts.
@@ -73,7 +73,8 @@ Set `LOG_LEVEL=0` in `platformio.ini` to deactivate serial output or `LOG_LEVEL=
 
 
 ### mining-software
-The mining software is configured via [config.toml](mining-software/config.toml) or CLI parameters (see `python3 miner.py --help` for more details). CLI arguments will overwrite values defined in `config.toml`. Each mining device has to be added under a separate `[[devices]]` section.
+The mining software is configured via [config.toml](mining-software/config.toml) or CLI parameters (see `python3 miner.py --help` for more details). CLI arguments will overwrite values defined in `config.toml`.  
+Mining devices can be specified in separate `[[devices]]` sections or will be discovered automatically if auto-detection is enabled.
 
 `make start-mining`: Starts the mining software with default parameters defined in `config.toml`.  
 `make test-mining`: Runs the test suite on the device defined in [test_config.toml](mining-software/tests/test_config.toml).  
@@ -84,7 +85,6 @@ The mining software is configured via [config.toml](mining-software/config.toml)
 
 ## Future Releases
 - [ ] Add [longpoll](https://en.bitcoin.it/wiki/BIP_0022#Optional:_Long_Polling) support
-- [ ] Add autodetection of miners
 - [ ] Add support for more development boards
 - [ ] Optimize sha256d on stm32 with fast Cortex-M4 assembly code
 - [ ] Add solo mining pool support (e.g. solo.ckpool.org)

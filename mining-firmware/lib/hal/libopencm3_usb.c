@@ -227,10 +227,13 @@ static const struct usb_device_descriptor dev_descriptor = {
 // cppcheck-suppress unusedFunction
 void otg_fs_isr(void) { usbd_poll(usbd_dev); }
 
-int board_send_data(const uint8_t *data, const int len) {
-    while (usbd_ep_write_packet(usbd_dev, 0x82, data, len) == 0)
-        ;
-    return len;
+void board_send_data(const uint8_t *data, const int len) {
+    // try to send 3 times
+    for (size_t i = 0; i < 3; ++i) {
+        if (usbd_ep_write_packet(usbd_dev, 0x82, data, len) != 0)
+            return;
+        sleep(2);
+    }
 }
 
 /**

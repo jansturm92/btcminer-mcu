@@ -32,6 +32,30 @@ class MiningDevice(ABC):
     def __str__(self):
         return f"<Device '{self.name}' [type={self.type}]>"
 
+    async def is_mining_device(self) -> bool:
+        """
+        Checks whether the device has mining capabilities using midstate hashing.
+
+        Sends known answer test for block #222222. Device should reply instantly with the correct nonce.
+        :return: True iff device is a mining device and uses midstate hashing, else False.
+        """
+
+        async def kat() -> bool:
+            data = bytes.fromhex(
+                "167ff5ad63ab786ce8fcb09136fff458ea016749b643beff9b0f750b5197565114b91663512521e21a04985c646268b8"
+            )
+            try:
+                await self.connect()
+                await self.write(data)
+            except DeviceConnectionError:
+                return False
+            return data[-4:] == await self.read(4)
+
+        try:
+            return await asyncio.wait_for(kat(), timeout=0.5)
+        except asyncio.TimeoutError:
+            return False
+
     @abstractmethod
     async def connect(self) -> None:
         """
@@ -95,6 +119,9 @@ class SerialMiningDevice(MiningDevice):
         self.baudrate = baudrate
         self.write_timeout = write_timeout
 
+    def __str__(self):
+        return f"<Device '{self.name}' [type={self.type}, port={self.port}]>"
+
     def __repr__(self):
         return (
             f"<Device '{self.name}' [type={self.type}, port={self.port}, baudrate={self.baudrate}"
@@ -156,18 +183,3 @@ class SimulatorMiningDevice(MiningDevice):
         delay = self.avg_delay + (random.uniform(-2, 2) if self.avg_delay > 2 else 0)
         await asyncio.sleep(delay)
         return struct.pack(">L", self._scanhash(self.data))
-
-
-def create_device(config_device: dict) -> MiningDevice:
-    if config_device["type"] == "serial":
-        return SerialMiningDevice(
-            name=config_device["name"],  # TODO read from USB descriptor if not given
-            port=config_device["port"],
-            baudrate=config_device["baudrate"],
-            write_timeout=config_device["write_timeout"],
-        )
-
-    return SimulatorMiningDevice(
-        name=config_device["name"],
-        avg_delay=config_device["avg_delay"],
-    )

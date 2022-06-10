@@ -27,14 +27,16 @@ from bitcoinlib.services.authproxy import AuthServiceProxy, JSONRPCException
 from bitcoinlib.transactions import Input, Output, Transaction
 from bitcoinlib.values import Value
 
-import mining_device
+from mining_device import MiningDevice, DeviceConnectionError
 from config_loader import miner_config
 from custom_logger import logger
+from device_manager import DeviceManager
 from sha256d_ms import calculate_midstate
 
 
 class MinerError(Exception):
-    pass
+    def __init__(self, message):
+        super().__init__(f"MinerError: {message}")
 
 
 def sha256d(data: bytes) -> bytes:
@@ -250,21 +252,13 @@ class Miner:
 
     def __init__(self, config: dict):
         self.config = config
-
-        self.devices: list[mining_device.MiningDevice] = []
-        if "devices" not in config:
-            raise MinerError("Please specify at least one mining device")
-        for dev_conf in config["devices"]:
-            device = mining_device.create_device(dev_conf)
-            logger.info(f"Adding {repr(device)}")
-            self.devices.append(device)
-
+        self.device_manager = DeviceManager(config)
         self.rpc = config["rpc"]
         self.rpc_url = (
             f"http://{self.rpc['username']}:{self.rpc['password']}@{self.rpc['server']}"
         )
 
-        self.mining_timeout = config["timeout"]
+        self.mining_timeout = config.get("timeout", 10)
 
     @staticmethod
     def check_nonce(block_template: BlockTemplate, nonce: str) -> bool:
@@ -287,7 +281,7 @@ class Miner:
 
     async def mine_coroutine(
         self,
-        device: mining_device.MiningDevice,
+        device: MiningDevice,
         block_template: BlockTemplate,
         midstate: bytes,
         block_header: bytes,
@@ -325,7 +319,7 @@ class Miner:
 
         except asyncio.CancelledError:
             logger.debug(f"Cancelling Mining Task for {device}")
-        except mining_device.DeviceConnectionError as e:
+        except DeviceConnectionError as e:
             logger.error(e)
             logger.debug(f"\t{e.detail}")
             await asyncio.sleep(10)
@@ -348,13 +342,14 @@ class Miner:
         :param nonce_start: optional nonce to start iterating from (in big endian hex format)
         :return: nonce if a valid proof of work was found for this block, else None (timeout)
         """
+        devices = self.device_manager.devices()
         midstate = calculate_midstate(block_template.block_header(None))
         logger.debug(f"\tmidstate = {midstate.hex()}")
 
         nonce_end = 2**32 - 1
         nonce_start = int(nonce_start, 16) if nonce_start else 0
-        nonce_incr = int((nonce_end - nonce_start) / len(self.devices))
-        nonces = [hex(nonce_start + i * nonce_incr) for i in range(len(self.devices))]
+        nonce_incr = int((nonce_end - nonce_start) / len(devices))
+        nonces = [hex(nonce_start + i * nonce_incr) for i in range(len(devices))]
         logger.debug(f"\tstarting nonces = {nonces}")
 
         # create task for each device
@@ -367,7 +362,7 @@ class Miner:
                     block_header=block_template.block_header(nonce),
                 )
             )
-            for nonce, device in zip(nonces, self.devices)
+            for nonce, device in zip(nonces, devices)
         ]
         done, _ = await asyncio.wait(
             mining_tasks,
@@ -468,7 +463,7 @@ def main():
     try:
         miner = Miner(miner_config)
         miner.start()
-    except MinerError as e:
+    except Exception as e:
         logger.critical(e)
     finally:
         logger.info("Shutting down Miner")
